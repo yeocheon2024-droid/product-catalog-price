@@ -5,6 +5,11 @@ import KakaoChannelButton from '../components/KakaoChannelButton';
 export const metadata: Metadata = {
   title: '지구농산 (주) | 품목 안내',
   description: '신선한 식자재를 공급합니다. 농산품, 수산품, 축산품, 공산품 전 품목 안내.',
+  openGraph: {
+    title: '지구농산 (주) | 품목 안내',
+    description: '신선한 식자재를 공급합니다. 농산품, 수산품, 축산품, 공산품 전 품목 안내.',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({

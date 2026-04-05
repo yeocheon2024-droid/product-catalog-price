@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { fetchProducts, getImageUrl, formatPrice, getDisplayName, Product } from '@/lib/supabase';
+import { fetchProducts, fetchCategoryOrder, getImageUrl, formatPrice, getDisplayName, Product } from '@/lib/supabase';
 
 const CATEGORY_ICONS: Record<string, string> = {
   '농산품': '', '수산품': '', '축산품': '', '공산품': '',
@@ -11,6 +11,7 @@ const ITEMS_PER_PAGE = 30;
 
 export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categoryOrder, setCategoryOrder] = useState<Record<string, number>>({});
   const [allMinorCategories, setAllMinorCategories] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState('전체');
   const [search, setSearch] = useState('');
@@ -60,16 +61,15 @@ export default function HomePage() {
 
   async function loadProducts() {
     setLoading(true);
-    const data = await fetchProducts();
+    const [data, order] = await Promise.all([fetchProducts(), fetchCategoryOrder()]);
     setProducts(data);
+    setCategoryOrder(order);
     const minors = new Set(data.map(p => p.minor_name).filter(Boolean));
-    const PRIORITY_ORDER = ['쌀', '김치/반찬', '계란', '기름/분말'];
     const sorted = Array.from(minors).sort((a, b) => {
-      const aIdx = PRIORITY_ORDER.indexOf(a);
-      const bIdx = PRIORITY_ORDER.indexOf(b);
-      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-      if (aIdx !== -1) return -1;
-      if (bIdx !== -1) return 1;
+      const aOrd = order[a] !== undefined ? order[a] : 9999;
+      const bOrd = order[b] !== undefined ? order[b] : 9999;
+      if (aOrd !== bOrd) return aOrd - bOrd;
+      // 순서 미지정 시 품목 수 많은 순
       const aCount = data.filter(p => p.minor_name === a).length;
       const bCount = data.filter(p => p.minor_name === b).length;
       return bCount - aCount;
@@ -83,35 +83,17 @@ export default function HomePage() {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.display_name || '').toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
     return matchCategory && matchSearch;
   }).sort((a, b) => {
-    if (activeCategory === '쌀') {
-      const aPrice = a.sell || Number.MAX_SAFE_INTEGER;
-      const bPrice = b.sell || Number.MAX_SAFE_INTEGER;
-      return aPrice - bPrice;
+    // 전체 목록: 중분류 순서 → 같은 중분류 내 품목 순서 (sort_order)
+    if (activeCategory === '전체') {
+      const aCat = categoryOrder[a.minor_name] !== undefined ? categoryOrder[a.minor_name] : 9999;
+      const bCat = categoryOrder[b.minor_name] !== undefined ? categoryOrder[b.minor_name] : 9999;
+      if (aCat !== bCat) return aCat - bCat;
     }
-    // 김치/반찬 카테고리: 김치류 먼저, 반찬류 나중에
-    if (activeCategory === '김치/반찬') {
-      const aIsKimchi = a.name.includes('김치') ? 0 : 1;
-      const bIsKimchi = b.name.includes('김치') ? 0 : 1;
-      return aIsKimchi - bIsKimchi;
-    }
-    if (activeCategory !== '전체') return 0;
-    const PRIORITY_ORDER = ['쌀', '김치/반찬', '계란', '기름/분말'];
-    const aIdx = PRIORITY_ORDER.indexOf(a.minor_name);
-    const bIdx = PRIORITY_ORDER.indexOf(b.minor_name);
-    const aOrder = aIdx !== -1 ? aIdx : 100 - products.filter(p => p.minor_name === a.minor_name).length;
-    const bOrder = bIdx !== -1 ? bIdx : 100 - products.filter(p => p.minor_name === b.minor_name).length;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    // 전체 목록에서 쌀끼리는 가격 오름차순
-    if (a.minor_name === '쌀' && b.minor_name === '쌀') {
-      return (a.sell || Number.MAX_SAFE_INTEGER) - (b.sell || Number.MAX_SAFE_INTEGER);
-    }
-    // 전체 목록에서 김치/반찬끼리는 김치 먼저
-    if (a.minor_name === '김치/반찬' && b.minor_name === '김치/반찬') {
-      const aIsKimchi = a.name.includes('김치') ? 0 : 1;
-      const bIsKimchi = b.name.includes('김치') ? 0 : 1;
-      return aIsKimchi - bIsKimchi;
-    }
-    return 0;
+    // 같은 중분류 내에서는 products.sort_order → name
+    const aOrd = (a as Product & { sort_order?: number }).sort_order ?? 0;
+    const bOrd = (b as Product & { sort_order?: number }).sort_order ?? 0;
+    if (aOrd !== bOrd) return aOrd - bOrd;
+    return a.name.localeCompare(b.name, 'ko');
   });
 
   const visible = filtered.slice(0, visibleCount);

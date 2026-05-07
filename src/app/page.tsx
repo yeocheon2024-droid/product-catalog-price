@@ -83,6 +83,10 @@ export default function HomePage() {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.display_name || '').toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
     return matchCategory && matchSearch;
   }).sort((a, b) => {
+    // 자체매입(지구로켓) 상품을 항상 먼저 노출
+    const aSelf = (a as Product & { vendor_type?: string }).vendor_type === 'self' ? 0 : 1;
+    const bSelf = (b as Product & { vendor_type?: string }).vendor_type === 'self' ? 0 : 1;
+    if (aSelf !== bSelf) return aSelf - bSelf;
     // 전체 목록: 중분류 순서 → 같은 중분류 내 품목 순서 (sort_order)
     if (activeCategory === '전체') {
       const aCat = categoryOrder[a.minor_name] !== undefined ? categoryOrder[a.minor_name] : 9999;

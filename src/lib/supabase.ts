@@ -7,6 +7,11 @@ export const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, s
 
 export const STORAGE_URL = 'https://pub-b2fb7e97bfae4e7f96db58f188aa1ce7.r2.dev';
 
+// 이미지 캐시 버전 — R2/CDN 에 같은 파일명으로 새 이미지를 올렸는데 옛 이미지가
+// 계속 보이면 이 숫자를 +1 해서 push. CDN 이 새 URL 로 인식해서 R2 에서 새로 가져옴.
+//   1: 2026-05-18 cache-busting 최초 도입 (이전 누적분 갱신)
+const IMAGE_CACHE_VERSION = 1;
+
 export interface Product {
   code: string;
   name: string;
@@ -35,14 +40,14 @@ export function getImageUrl(product: Product): string | null {
     const url = product.image_url;
     if (url.includes('supabase') && url.includes('product-images')) {
       const filename = url.split('/').pop()?.split('?')[0];
-      return `${STORAGE_URL}/${filename}`;
+      return `${STORAGE_URL}/${filename}?v=${IMAGE_CACHE_VERSION}`;
     }
     if (url.startsWith('http') && !url.includes('supabase')) {
-      return `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=webp`;
+      return `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=webp&v=${IMAGE_CACHE_VERSION}`;
     }
     return url;
   }
-  return `${STORAGE_URL}/${product.code}.png`;
+  return `${STORAGE_URL}/${product.code}.png?v=${IMAGE_CACHE_VERSION}`;
 }
 
 // 예약 가격 자동 적용 — 적용일 도래한 pending 건을 products.sell에 반영
